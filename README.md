@@ -1,6 +1,9 @@
 # Pokedex
 Chatbot avec la PokeAPI
 
+Modules Utilisés : 
+AXIOS
+
 
 Objectifs : 
 
