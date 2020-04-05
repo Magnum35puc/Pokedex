@@ -1,41 +1,40 @@
-'use strict';
-const request = require('request');
-const crypto = require('crypto');
+'use strict'
 
-class FBeamer {
-	constructor(config) {
-		try {
-			if (!config || config.PAGE_ACCESS_TOKEN === undefined || config.VERIFY_TOKEN === undefined || config.APP_SECRET === undefined) {
-				throw new Error("Unable to access tokens!");
-			} else {
-				this.PAGE_ACCESS_TOKEN = config.PAGE_ACCESS_TOKEN;
-				this.VERIFY_TOKEN = config.VERIFY_TOKEN;
-				this.APP_SECRET = config.APP_SECRET;
+const config = require('./../config');
+const crypto = require('crypto');
+const request = require('request');
+const apiVersion = 'v6.0';
+
+
+class FBeamer{
+	constructor({pageAccessToken, VerifyToken, AppSecret}){
+		this.pageAccessToken = pageAccessToken;
+		this.VerifyToken = VerifyToken;
+		this.AppSecret = AppSecret;
+	}
+
+	registerHook(req,res){
+		const params = req.query;
+		const mode = params['hub.mode'];
+		const token = params['hub.verify_token'];
+		const challenge = params['hub.challenge'];
+		try{
+			if(mode === 'subscribe' && token === this.VerifyToken)
+				{
+					console.log("WebHook Registered !");
+					return res.send(challenge);
+				}
+			else{
+				throw "Could not register webhook";
+				return res.sendStatus(200);
 			}
-		} catch (e) {
+		}
+		catch(e){
 			console.log(e);
 		}
 	}
 
-	registerHook(req, res) {
-		// If req.query.hub.mode is 'subscribe'
-		// and if req.query.hub.verify_token is the same as this.VERIFY_TOKEN
-		// then send back an HTTP status 200 and req.query.hub.challenge
-		let {
-			mode,
-			verify_token,
-			challenge
-		} = req.query.hub;
-
-		if (mode === 'subscribe' && verify_token === this.VERIFY_TOKEN) {
-			return res.end(challenge);
-		} else {
-			console.log("Could not register webhook!");
-			return res.status(403).end();
-		}
-	}
-
-	verifySignature(req, res, next) {
+	verifySignature(req,res,next){
 		let rawData = '';
 
 		req.on('data', function(data) {
@@ -43,7 +42,7 @@ class FBeamer {
 		});
 
 		req.on('end', () => {
-			let hash = crypto.createHmac('sha1', this.APP_SECRET).update(rawData).digest('hex');
+			let hash = crypto.createHmac('sha1', this.AppSecret).update(rawData).digest('hex');
 			let signature = req.headers['x-hub-signature'];
 			if (hash !== signature.split("=")[1]) {
 				// Implement a logging and notification mechanism
@@ -52,30 +51,13 @@ class FBeamer {
 
 		});
 		return next();
-	}
+		}
 
-	subscribe() {
-		request({
-			uri: 'https://graph.facebook.com/v2.6/me/subscribed_apps',
-			qs: {
-				access_token: this.PAGE_ACCESS_TOKEN
-			},
-			method: 'POST'
-		}, (error, response, body) => {
-			if (!error && JSON.parse(body).success) {
-				console.log("Subscribed to the page!");
-			} else {
-				console.log(error);
-			}
-		});
-	}
-
-	incoming(req, res, cb) {
-		// Extract the body of the POST request
-		let data = req.body;
-
-		if (data.object === 'page') {
-			// Iterate through the page entry Array
+	incoming(req,res,cb){
+		res.sendStatus(200);
+		if(req.body.object === 'page' && req.body.entry)
+		{
+			let data = req.body;
 			data.entry.forEach(pageObj => {
 				// Iterate through the messaging Array
 				pageObj.messaging.forEach(msgEvent => {
@@ -84,11 +66,23 @@ class FBeamer {
 						timeOfMessage: msgEvent.timestamp,
 						message: msgEvent.message
 					}
-					cb(messageObj);
+					return cb(messageObj);
 				});
 			});
 		}
-		res.send(200);
+	}
+
+	messageHandler(obj){
+		let sender = obj.sender;
+		let message = obj.message;
+		if(message.text){
+			obj = {
+				sender,
+				type : 'text',
+				content : message.text
+			}
+		}
+		return obj;
 	}
 
 	sendMessage(payload) {
@@ -97,7 +91,7 @@ class FBeamer {
 			request({
 				uri: 'https://graph.facebook.com/v2.6/me/messages',
 				qs: {
-					access_token: this.PAGE_ACCESS_TOKEN
+					access_token: this.pageAccessToken
 				},
 				method: 'POST',
 				json: payload
@@ -113,23 +107,20 @@ class FBeamer {
 		});
 	}
 
-	// Send a text message
 	txt(id, text, messaging_type = 'RESPONSE') {
-		let obj = {
-			messaging_type,
-			recipient: {
-				id
-			},
-			message: {
-				text
-			}
+	let obj = {
+		messaging_type,
+		recipient: {
+			id
+		},
+		message: {
+			text
 		}
-
-		this.sendMessage(obj)
-			.catch(error => console.log(error));
 	}
 
-	// Send an image message
+	this.sendMessage(obj)
+		.catch(error => console.log(error));
+	}
 	img(id, url, messaging_type = 'RESPONSE') {
 		let obj = {
 			messaging_type,
@@ -145,10 +136,19 @@ class FBeamer {
 				}
 			}
 		}
+		this.sendMessage(obj).catch(error => console.log(error));
+	}
 
-		this.sendMessage(obj)
-			.catch(error => console.log(error));
+	sayHi(){
+		console.log(this.pageAccessToken);
+	}
+	get_Page_Access()
+	{
+		return this.pageAccessToken;
+	}
+	get_Verify(){
+		return this.VerifyToken;
 	}
 }
 
-module.exports = FBeamer;
+module.exports = FBeamer
