@@ -1,5 +1,5 @@
 # Pokebot
-###### Yann Kervella Théophile Puiseux
+###### YK TP
 
 ![alt text](https://www.kindpng.com/picc/m/2-24475_pokemon-logo-download-png-image-logos-pokemon-go.png "Logo PokeBot")
 
